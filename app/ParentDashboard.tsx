@@ -1,4 +1,4 @@
-import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { get, onValue, ref, set } from 'firebase/database';
@@ -263,6 +263,9 @@ export default function ParentDashboard() {
   // Add state for GPT task change
   const [gptLoading, setGptLoading] = useState(false);
   const [revisedTask, setRevisedTask] = useState<any>(null);
+  // Quarter/Weeks UI state
+  const [selectedQuarter, setSelectedQuarter] = useState<number>(1);
+  const [quarterDropdownVisible, setQuarterDropdownVisible] = useState(false);
 
   React.useEffect(() => {
     if (!parentId) return;
@@ -359,7 +362,7 @@ export default function ParentDashboard() {
               loadedTasks = Object.values(loadedTasks);
             }
             // Map fields for UI
-            loadedTasks = loadedTasks.map((t: any) => ({
+            loadedTasks = loadedTasks.map((t: any, idx: number) => ({
               title: t.title || t.task_title || '',
               details: t.details || t.task_details || '',
               objective: t.objective || t.task_objective || '',
@@ -368,6 +371,9 @@ export default function ParentDashboard() {
               status: t.status ||
                 (t.preRating == null ? 'notdone' : (t.postRating == null ? 'ongoing' : 'done')),
               assessmentScore: t.assessmentScore || { Preassessment: null, Postassessment: null },
+              // Graceful defaults for new structure
+              week: typeof t.week === 'number' ? t.week : ((idx % 8) + 1),
+              quarter: typeof t.quarter === 'number' ? t.quarter : 1,
             }));
             setTasks(loadedTasks);
           } else {
@@ -400,7 +406,7 @@ export default function ParentDashboard() {
 
               console.log('API result:', result);
               let tasksToSave = Array.isArray(result.tasks) ? result.tasks : Array.isArray(result) ? result : [];
-              tasksToSave = tasksToSave.map((t: any) => ({
+              tasksToSave = tasksToSave.map((t: any, idx: number) => ({
                 title: t.task_title || t.title || '',
                 details: t.task_details || t.details || '',
                 objective: t.task_objective || t.objective || '',
@@ -411,6 +417,8 @@ export default function ParentDashboard() {
                   Preassessment: null,
                   Postassessment: null,
                 },
+                week: typeof t.week === 'number' ? t.week : ((idx % 8) + 1),
+                quarter: typeof t.quarter === 'number' ? t.quarter : 1,
               }));
               await set(parentTasksRef, tasksToSave);
               setTasks(tasksToSave);
@@ -748,6 +756,32 @@ export default function ParentDashboard() {
   const postScore = postPattern + postNumbers;
   const postStatus = getStatusFromScore(postScore, 20, postPattern, postNumbers);
 
+  // Quarter-specific derived scores (fallback to overall if quarter data not present)
+  const quarterKey = `Q${selectedQuarter}` as const;
+  const quarterSource: any = (studentData?.quarterScores && studentData.quarterScores[quarterKey])
+    || (studentData?.quarters && studentData.quarters[quarterKey])
+    || null;
+  const selPrePattern = quarterSource?.preScore?.pattern ?? prePattern;
+  const selPreNumbers = quarterSource?.preScore?.numbers ?? preNumbers;
+  const selPostPattern = quarterSource?.postScore?.pattern ?? postPattern;
+  const selPostNumbers = quarterSource?.postScore?.numbers ?? postNumbers;
+  const selPreScore = selPrePattern + selPreNumbers;
+  const selPostScore = selPostPattern + selPostNumbers;
+  const selPrePercent = Math.round((selPreScore / 20) * 100);
+  const selPostPercent = Math.round((selPostScore / 20) * 100);
+  const selPreOutOf10 = Math.round(selPreScore / 2);
+  const selPostOutOf10 = Math.round(selPostScore / 2);
+
+  // Weekly progress for the selected quarter (weeks 1-8)
+  const tasksForSelectedQuarter = tasks.filter(t => (t.quarter ?? 1) === selectedQuarter);
+  const weekPercents = Array.from({ length: 8 }, (_, i) => {
+    const weekNum = i + 1;
+    const weekTasks = tasksForSelectedQuarter.filter(t => (t.week ?? 1) === weekNum);
+    if (weekTasks.length === 0) return 0;
+    const done = weekTasks.filter(t => t.status === 'done').length;
+    return Math.round((done / weekTasks.length) * 100);
+  });
+
   // Helper to render stars
   const renderStars = (count: number) => {
     return Array.from({ length: 5 }, (_, i) =>
@@ -934,180 +968,81 @@ export default function ParentDashboard() {
           </BlurView>
         </Modal>
 
-        <View style={styles.progressRowCardWrap}>
-          <View style={styles.progressCardSingle}>
-            <View style={styles.progressCol}>
-              <View style={styles.circleWrap}>
-                <View style={[styles.circle, { borderColor: '#2ecc40' }] }>
-                  <Text style={[styles.circleText, { color: '#2ecc40', fontSize: 28, fontWeight: 'bold' }]}>{studentData ? Math.round(((studentData.preScore?.pattern ?? 0) + (studentData.preScore?.numbers ?? 0)) / 20 * 100) : 0}%</Text>
-                </View>
-              </View>
-              <Text style={styles.progressLabel}>Pretest</Text>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#0097a7', marginTop: 2 }}>{studentData ? `${preScore}/20` : '0/20'}</Text>
-              <Text style={{ fontSize: 13, color: '#777', marginTop: 2 }}>Pattern: {prePattern}/10</Text>
-              <Text style={{ fontSize: 13, color: '#777', marginTop: 2 }}>Numbers: {preNumbers}/10</Text>
-              {/* Status badge */}
-              <View style={{ backgroundColor: statusColors[preStatus], borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3, marginTop: 4, alignSelf: 'flex-start' }}>
-                <Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{preStatus}</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.progressCardSingle}>
-            <View style={styles.progressCol}>
-              <View style={styles.circleWrap}>
-                <View style={[styles.circle, { borderColor: '#2ecc40' }] }>
-                  <Text style={[styles.circleText, { color: '#2ecc40', fontSize: 28, fontWeight: 'bold' }]}>{studentData ? Math.round(((studentData.postScore?.pattern ?? 0) + (studentData.postScore?.numbers ?? 0)) / 20 * 100) : 0}%</Text>
-                </View>
-              </View>
-              <Text style={styles.progressLabel}>Post-test</Text>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#0097a7', marginTop: 2 }}>{studentData ? `${postScore}/20` : '0/20'}</Text>
-              <Text style={{ fontSize: 13, color: '#777', marginTop: 2 }}>Pattern: {postPattern}/10</Text>
-              <Text style={{ fontSize: 13, color: '#777', marginTop: 2 }}>Numbers: {postNumbers}/10</Text>
-              {/* Status badge */}
-              <View style={{ backgroundColor: statusColors[postStatus], borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3, marginTop: 4, alignSelf: 'flex-start' }}>
-                <Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{postStatus}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
+        {/* Home Exercise CTA */}
+        <TouchableOpacity
+          style={styles.homeExerciseBtn}
+          onPress={() => router.push('/WelcomePage')}
+        >
+          <Text style={styles.homeExerciseText}>Home Exercise</Text>
+        </TouchableOpacity>
 
-        <View style={styles.tasksBox}>
-          <View style={styles.tasksTitleRow}>
-            <Text style={styles.tasksTitle}>Tasks</Text>
-            <View style={styles.generalProgressWrap}>
-              <View style={[styles.generalProgressBar, { width: `${progressPercent}%` }]} />
-            </View>
-            <Text style={styles.generalProgressText}>{`${progressPercent}%`}</Text>
+        {/* Combined Quarter Panel: Pre/Post test + Weekly progress */}
+        <View style={styles.quarterPanel}>
+          <View style={styles.quarterHeaderRow}>
+            <Text style={styles.sectionTitle}>Quarter</Text>
+            <TouchableOpacity style={styles.quarterDropdown} onPress={() => setQuarterDropdownVisible(true)}>
+              <Text style={{ fontWeight: '600', color: '#222', marginRight: 4 }}>Quarter {selectedQuarter}</Text>
+              <MaterialIcons name="arrow-drop-down" size={22} color="#222" />
+            </TouchableOpacity>
           </View>
-          {/* Scrollable tasks list */}
-          {pretestNotDone ? (
-            <View style={[styles.taskRow, { justifyContent: 'center', alignItems: 'center', paddingVertical: 20 }]}> 
-              <Text style={{ fontSize: 16, color: '#888', textAlign: 'center' }}>
-                Tasks will load after your child completes the pretest.
-              </Text>
-            </View>
-          ) : tasksLoading ? (
-            <View style={[styles.taskRow, { justifyContent: 'center', alignItems: 'center', paddingVertical: 20 }]}> 
-              <Text style={{ fontSize: 16, color: '#888', textAlign: 'center' }}>
-                Assigning tasks...
-              </Text>
-            </View>
-          ) : tasks.length === 0 ? (
-            <View style={[styles.taskRow, { justifyContent: 'center', alignItems: 'center', paddingVertical: 20 }]}> 
-              <Text style={{ fontSize: 16, color: '#888', textAlign: 'center' }}>
-                No tasks available yet.{'\n'}
-                <Text style={{ fontSize: 14, color: '#aaa' }}>
-                  Tasks will appear once your child completes the pretest.
-                </Text>
-              </Text>
-            </View>
-          ) : (
-            tasks.map((item, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.taskCard,
-                  item.status === 'done' ? styles.taskCardDone : item.status === 'ongoing' ? styles.taskCardOngoing : styles.taskCardNotDone,
-                ]}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                  <View style={[
-                    styles.taskNum,
-                    item.status === 'done' ? styles.taskNumDone : styles.taskNumGray,
-                  ]}>
-                    <Text style={[
-                      styles.taskNumText,
-                      item.status === 'done' ? styles.taskNumTextDone : styles.taskNumTextGray,
-                    ]}>{index + 1}</Text>
+          <Modal
+            visible={quarterDropdownVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setQuarterDropdownVisible(false)}
+          >
+            <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setQuarterDropdownVisible(false)}>
+              <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, minWidth: 220 }}>
+                {[1,2,3,4].map(q => (
+                  <TouchableOpacity key={q} style={{ paddingVertical: 10, borderBottomWidth: q===4?0:1, borderBottomColor: '#eee' }} onPress={() => { setSelectedQuarter(q); setQuarterDropdownVisible(false); }}>
+                    <Text style={{ fontSize: 16, color: '#222' }}>Quarter {q}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </Pressable>
+          </Modal>
+
+          <View style={styles.scoreCirclesRow}>
+            <View style={styles.scoreItemHalf}>
+              <View style={styles.scoreItemRow}>
+                <View style={styles.circleWrap}>
+                  <View style={[styles.circle, { borderColor: '#2ecc40' }] }>
+                    <Text style={[styles.circleText, { color: '#2ecc40', fontSize: 22, fontWeight: 'bold' }]}>{studentData ? selPrePercent : 0}%</Text>
                   </View>
-                  <Text style={styles.taskTitleSmall}>{item.title}</Text>
-                  {item.category && (
-                    <View style={{
-                      backgroundColor: item.category === 'pattern' ? '#e3f2fd' :
-                        item.category === 'numbers' ? '#f3e5f5' :
-                        item.category === 'technology' ? '#e8f5e8' :
-                        item.category === 'practical' ? '#fff3e0' :
-                        item.category === 'mixed' ? '#fce4ec' : '#f1f1f1',
-                      borderRadius: 4,
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      marginLeft: 8,
-                      alignSelf: 'flex-start',
-                    }}>
-                      <Text style={{
-                        fontSize: 10,
-                        color: item.category === 'pattern' ? '#1976d2' :
-                          item.category === 'numbers' ? '#7b1fa2' :
-                          item.category === 'technology' ? '#388e3c' :
-                          item.category === 'practical' ? '#f57c00' :
-                          item.category === 'mixed' ? '#c2185b' : '#666',
-                        fontWeight: 'bold',
-                      }}>
-                        {item.category.toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
                 </View>
-                {!!item.details && (
-                  <Text style={styles.taskDetails}>{item.details}</Text>
-                )}
-                {(item.preRating || item.postRating) && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, marginBottom: 2 }}>
-                    {item.preRating && (
-                      <>
-                        <Text style={{ fontSize: 13, color: '#888', marginRight: 2 }}>Simula:</Text>
-                        {renderStars(item.preRating)}
-                      </>
-                    )}
-                    {item.postRating && (
-                      <>
-                        <Text style={{ fontSize: 13, color: '#888', marginLeft: 16, marginRight: 2 }}>Matapos:</Text>
-                        {renderStars(item.postRating)}
-                      </>
-                    )}
-                  </View>
-                )}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                  <View style={[
-                    styles.taskStatus,
-                    item.status === 'done' ? styles.statusDone : item.status === 'ongoing' ? styles.statusOngoing : styles.statusNotDone,
-                  ]}>
-                    {item.status === 'done' && <MaterialIcons name="check-circle" size={16} color="#2ecc40" style={{ marginRight: 4 }} />}
-                    {item.status === 'ongoing' && <MaterialIcons name="access-time" size={16} color="#f1c40f" style={{ marginRight: 4 }} />}
-                    {item.status === 'notdone' && <MaterialIcons name="radio-button-unchecked" size={16} color="#bbb" style={{ marginRight: 4 }} />}
-                    <Text style={{ fontWeight: 'bold', fontSize: 13 }}>{statusLabel(item.status)}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    {item.status === 'notdone' && (
-                      <TouchableOpacity
-                        style={styles.changeBtn}
-                        onPress={() => handleChangePress(index)}
-                      >
-                        <Feather name="refresh-cw" size={20} color="#2ecc40" />
-                      </TouchableOpacity>
-                    )}
-                    {item.status === 'notdone' && (
-                      <TouchableOpacity
-                        style={styles.simulanBtn}
-                        onPress={() => handleTaskPress(index)}
-                      >
-                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Simulan</Text>
-                      </TouchableOpacity>
-                    )}
-                    {item.status === 'ongoing' && (
-                      <TouchableOpacity
-                        style={styles.markTaposBtn}
-                        onPress={() => handleTaskPress(index)}
-                      >
-                        <Text style={{ color: '#222', fontWeight: 'bold', fontSize: 15 }}>Markahang Tapos</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                <View style={styles.scoreTextCol}>
+                  <Text style={styles.progressLabelLarge}>Pretest</Text>
+                  <Text style={styles.scoreOutOfTen}>{studentData ? `${selPreOutOf10}/10` : '0/10'}</Text>
                 </View>
               </View>
-            ))
-          )}
+            </View>
+            <View style={styles.scoreItemHalf}>
+              <View style={styles.scoreItemRow}>
+                <View style={styles.circleWrap}>
+                  <View style={[styles.circle, { borderColor: '#ff5a5a' }]}>
+                    <Text style={[styles.circleText, { color: '#ff5a5a', fontSize: 22, fontWeight: 'bold' }]}>{studentData ? selPostPercent : 0}%</Text>
+                  </View>
+                </View>
+                <View style={styles.scoreTextCol}>
+                  <Text style={styles.progressLabelLarge}>Post-test</Text>
+                  <Text style={styles.scoreOutOfTen}>{studentData ? `${selPostOutOf10}/10` : '0/10'}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View style={{ marginTop: 10, width: '100%' }}>
+            {Array.from({ length: 8 }, (_, i) => (
+              <View key={i} style={styles.weekRow}>
+                <Text style={styles.weekLabel}>Week {i + 1}</Text>
+                <View style={styles.weekBarBg}>
+                  <View style={[styles.weekBarFill, { width: `${weekPercents[i]}%` }]} />
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
+        {/* Tasks panel removed per new design */}
 
         {/* Change Reason Modal */}
         <Modal
@@ -1408,7 +1343,7 @@ export default function ParentDashboard() {
   );
 }
 
-const CIRCLE_SIZE = 80;
+const CIRCLE_SIZE = Math.max(64, Math.min(96, Math.round(width * 0.22)));
 const styles = StyleSheet.create({
   bg: {
     flex: 1,
@@ -1494,7 +1429,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
   },
   announcementBox: {
-    width: width * 0.8,
+    width: width * 0.9,
     backgroundColor: 'rgba(255,255,255,0.82)',
     borderRadius: 20,
     padding: 18,
@@ -1558,6 +1493,105 @@ const styles = StyleSheet.create({
     gap: 12,
     marginLeft: 'auto',
     marginRight: 'auto',
+  },
+  homeExerciseBtn: {
+    width: '92%',
+    backgroundColor: '#27ae60',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  homeExerciseText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  quarterPanel: {
+    width: '92%',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  quarterHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  quarterDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f3f3',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  scoreCirclesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  scoreItemHalf: {
+    flex: 1,
+    minWidth: 0,
+  },
+  scoreItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  scoreTextCol: {
+    flexDirection: 'column',
+  },
+  progressLabelLarge: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#222',
+  },
+  scoreOutOfTen: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0097a7',
+  },
+  weekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 6,
+  },
+  weekLabel: {
+    width: 70,
+    fontSize: 14,
+    color: '#222',
+    fontWeight: '700',
+  },
+  weekBarBg: {
+    flex: 1,
+    height: 12,
+    backgroundColor: '#e6e6e6',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  weekBarFill: {
+    height: 12,
+    backgroundColor: '#2ecc40',
+    borderRadius: 8,
   },
   progressCardSingle: {
     flex: 1,
