@@ -1,6 +1,6 @@
 import { useFonts } from 'expo-font';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Animated, Dimensions, ImageBackground, StyleSheet, Text, View } from 'react-native';
 
 const { width, height } = Dimensions.get('window');

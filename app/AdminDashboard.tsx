@@ -154,7 +154,6 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [newTeacher, setNewTeacher] = useState<Teacher>({ name: '', email: '', contact: '', school: '', password: '', accountId: '', teacherId: '' });
   const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [teacherIdCounter, setTeacherIdCounter] = useState(0);
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editTeacher, setEditTeacher] = useState<Teacher | null>(null);
@@ -178,11 +177,7 @@ export default function AdminDashboard() {
   const [isTestingGeneralHealth, setIsTestingGeneralHealth] = useState(false);
 
   const windowWidth = Dimensions.get('window').width;
-  const windowHeight = Dimensions.get('window').height;
   const isSmallScreen = windowWidth < 400;
-  const isMediumScreen = windowWidth < 600;
-  const isLargeScreen = windowWidth >= 600;
-  const numColumns = isSmallScreen ? 1 : isMediumScreen ? 2 : 3;
 
   
 
@@ -192,7 +187,7 @@ export default function AdminDashboard() {
     try {
       const result = await testGptApiHealth();
       setGptApiHealth(result);
-    } catch (error) {
+    } catch {
       setGptApiHealth({ status: 'down', error: 'Test failed' });
     } finally {
       setIsTestingGptApi(false);
@@ -205,7 +200,7 @@ export default function AdminDashboard() {
     try {
       const result = await testGeneralHealth();
       setGeneralHealth(result);
-    } catch (error) {
+    } catch {
       setGeneralHealth({ status: 'down', error: 'Test failed' });
     } finally {
       setIsTestingGeneralHealth(false);
@@ -280,7 +275,7 @@ export default function AdminDashboard() {
               setEditTeacher(null);
               setEditMode(false);
               Alert.alert('Deleted', `${teacher.name} has been deleted.`);
-            } catch (error) {
+            } catch {
               Alert.alert('Error', 'Failed to delete teacher.');
             }
           }
@@ -332,7 +327,7 @@ export default function AdminDashboard() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [gptApiHealth?.status, generalHealth?.status]);
+  }, [gptApiHealth?.status, generalHealth?.status, gptApiHealth?.restartTime, generalHealth?.restartTime]);
 
   // Add useEffect to fetch classes
   useEffect(() => {
@@ -680,7 +675,7 @@ export default function AdminDashboard() {
                    paddingHorizontal: isSmallScreen ? 12 : 16,
                    paddingVertical: isSmallScreen ? 6 : 8
                  }]}>
-                   <AntDesign name="adduser" size={isSmallScreen ? 18 : 20} color="#fff" />
+                   <AntDesign name="user-add" size={isSmallScreen ? 18 : 20} color="#fff" />
                    <Text style={[styles.addButtonText, { 
                      fontSize: isSmallScreen ? 12 : 14 
                    }]}>Add Teacher</Text>
@@ -912,7 +907,7 @@ export default function AdminDashboard() {
                             setTeachers(prev => prev.map(t => t.accountId === editTeacher.accountId ? updated : t));
                             setSelectedTeacher(null);
                             setEditMode(false);
-                          } catch (error) {
+                          } catch {
                             Alert.alert('Error', 'Failed to save changes.');
                           }
                         }}>
@@ -958,7 +953,7 @@ export default function AdminDashboard() {
                   try {
                     await auth.signOut();
                     router.replace('/RoleSelection');
-                  } catch (e) {
+                  } catch {
                     Alert.alert('Logout Failed', 'Could not log out.');
                   }
                 }}

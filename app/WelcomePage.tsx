@@ -1,3 +1,4 @@
+import { useAudio } from '@/contexts/AudioContext';
 import { useFonts } from 'expo-font';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
@@ -7,6 +8,7 @@ const { width, height } = Dimensions.get('window');
 
 export default function WelcomePage() {
   const router = useRouter();
+  const { initializeMusic, playMusic } = useAudio();
   const [fontsLoaded] = useFonts({
     'LeagueSpartan-Bold': require('../assets/fonts/LeagueSpartan-Bold.ttf'),
     'LuckiestGuy-Regular': require('../assets/fonts/LuckiestGuy-Regular.ttf'),
@@ -18,6 +20,13 @@ export default function WelcomePage() {
   const startButtonScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    // Initialize and start background music
+    const setupMusic = async () => {
+      await initializeMusic();
+      await playMusic();
+    };
+    setupMusic();
+
     // Beating animation for logo
     Animated.loop(
       Animated.sequence([
@@ -33,7 +42,7 @@ export default function WelcomePage() {
         Animated.timing(startButtonScale, { toValue: 1, duration: 1000, useNativeDriver: true }),
       ])
     ).start();
-  }, []);
+  }, [initializeMusic, playMusic, logoScale, startButtonScale]);
 
   if (!fontsLoaded) return null;
 

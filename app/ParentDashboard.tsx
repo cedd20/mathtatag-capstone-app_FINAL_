@@ -1,4 +1,4 @@
-import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { get, onValue, ref, set } from 'firebase/database';
@@ -11,17 +11,6 @@ const { width } = Dimensions.get('window');
 
 
 
-// Helper to get status from score (copied from TeacherDashboard)
-function getStatusFromScore(score: number, total: number, pattern: number, numbers: number) {
-  if ((pattern ?? 0) === 0 && (numbers ?? 0) === 0) return 'Not yet taken';
-  if (typeof score !== 'number' || typeof total !== 'number' || total === 0 || score === -1) return 'Not yet taken';
-  const percent = (score / total) * 100;
-  if (percent < 25) return 'Intervention';
-  if (percent < 50) return 'For Consolidation';
-  if (percent < 75) return 'For Enhancement';
-  if (percent < 85) return 'Proficient';
-  return 'Highly Proficient';
-}
 
 // --- Add fetchWithRetry helper ---
 async function fetchWithRetry(url: string, options: any, retries = 3, delay = 1500): Promise<Response> {
@@ -37,14 +26,6 @@ async function fetchWithRetry(url: string, options: any, retries = 3, delay = 15
   }
   throw new Error('Failed after retries');
 }
-const statusColors: any = {
-  'Intervention': '#ff5a5a',
-  'For Consolidation': '#ffb37b',
-  'For Enhancement': '#ffe066',
-  'Proficient': '#7ed957',
-  'Highly Proficient': '#27ae60',
-  'Not yet taken': '#888',
-};
 
 const incomeBrackets = [
   '₱10,000 and below',
@@ -54,125 +35,6 @@ const incomeBrackets = [
   '₱25,001 and above',
 ];
 
-// Task recommendation logic based on scores and income
-const generateTaskRecommendations = (patternScore: number, numbersScore: number, incomeBracket: string) => {
-  const totalScore = patternScore + numbersScore;
-  const averageScore = totalScore / 2;
-  
-  // Map income bracket to numeric value for calculations
-  const incomeMap: { [key: string]: number } = {
-    '₱10,000 and below': 1,
-    '₱10,001–15,000': 2,
-    '₱15,001–20,000': 3,
-    '₱20,001–25,000': 4,
-    '₱25,001 and above': 5,
-  };
-  
-  const incomeLevel = incomeMap[incomeBracket] || 1;
-  
-  const tasks = [];
-  
-  // Pattern-focused tasks
-  if (patternScore < 5) {
-    tasks.push({
-      title: 'Basic Pattern Recognition',
-      status: 'notdone',
-      details: 'Practice identifying simple patterns in sequences. Start with basic shapes and colors.',
-      priority: 'high',
-      category: 'pattern'
-    });
-  } else if (patternScore < 8) {
-    tasks.push({
-      title: 'Intermediate Pattern Practice',
-      status: 'notdone',
-      details: 'Work on more complex patterns and sequences. Include number patterns.',
-      priority: 'medium',
-      category: 'pattern'
-    });
-  } else {
-    tasks.push({
-      title: 'Advanced Pattern Challenges',
-      status: 'notdone',
-      details: 'Tackle complex pattern recognition and prediction exercises.',
-      priority: 'low',
-      category: 'pattern'
-    });
-  }
-  
-  // Numbers-focused tasks
-  if (numbersScore < 5) {
-    tasks.push({
-      title: 'Basic Number Operations',
-      status: 'notdone',
-      details: 'Practice basic addition and subtraction with visual aids.',
-      priority: 'high',
-      category: 'numbers'
-    });
-  } else if (numbersScore < 8) {
-    tasks.push({
-      title: 'Intermediate Number Work',
-      status: 'notdone',
-      details: 'Practice mental math and quick calculations.',
-      priority: 'medium',
-      category: 'numbers'
-    });
-  } else {
-    tasks.push({
-      title: 'Advanced Number Challenges',
-      status: 'notdone',
-      details: 'Complex problem-solving with numbers and word problems.',
-      priority: 'low',
-      category: 'numbers'
-    });
-  }
-  
-  // Income-based tasks (more resources for higher income)
-  if (incomeLevel >= 4) {
-    tasks.push({
-      title: 'Technology-Enhanced Learning',
-      status: 'notdone',
-      details: 'Use educational apps and online resources for interactive learning.',
-      priority: 'medium',
-      category: 'technology'
-    });
-  } else {
-    tasks.push({
-      title: 'Low-Cost Learning Activities',
-      status: 'notdone',
-      details: 'Use household items and free resources for hands-on learning.',
-      priority: 'high',
-      category: 'practical'
-    });
-  }
-  
-  // Mixed practice for balanced improvement
-  if (Math.abs(patternScore - numbersScore) > 3) {
-    tasks.push({
-      title: 'Balanced Skill Development',
-      status: 'notdone',
-      details: 'Focus on the weaker area while maintaining strength in the stronger area.',
-      priority: 'high',
-      category: 'mixed'
-    });
-  }
-  
-  // Remedial work for very low scores
-  if (totalScore < 8) {
-    tasks.push({
-      title: 'Foundation Building',
-      status: 'notdone',
-      details: 'Build basic mathematical concepts and confidence through simple activities.',
-      priority: 'high',
-      category: 'remedial'
-    });
-  }
-  
-  // Sort by priority (high first)
-  const priorityOrder = { high: 3, medium: 2, low: 1 };
-  tasks.sort((a, b) => priorityOrder[b.priority as keyof typeof priorityOrder] - priorityOrder[a.priority as keyof typeof priorityOrder]);
-  
-  return tasks;
-};
 
 // Add GPT API function after the fetchWithRetry helper
 const askGpt = async (prompt: string): Promise<string> => {
@@ -245,7 +107,6 @@ export default function ParentDashboard() {
   const [changeTaskIdx, setChangeTaskIdx] = useState<number | null>(null);
   const [changeReason, setChangeReason] = useState<string>('');
   const [changeReasonOther, setChangeReasonOther] = useState<string>('');
-  const [teachers, setTeachers] = useState<any>({});
   const [teachersById, setTeachersById] = useState<any>({});
   const [studentData, setStudentData] = useState<any>(null);
   const [setupIncome, setSetupIncome] = useState('');
@@ -255,14 +116,15 @@ export default function ParentDashboard() {
   const [ratingType, setRatingType] = useState<'pre' | 'post' | null>(null);
   const [ratingTaskIdx, setRatingTaskIdx] = useState<number | null>(null);
   const [selectedRating, setSelectedRating] = useState<number>(0);
-  const [pretestNotDone, setPretestNotDone] = useState(false);
-  const [tasksLoading, setTasksLoading] = useState(false);
   // Add state for evaluation modal
   const [showEvaluationModal, setShowEvaluationModal] = useState(false);
   const [lastSeenEvaluationTimestamp, setLastSeenEvaluationTimestamp] = useState<string | null>(null);
   // Add state for GPT task change
   const [gptLoading, setGptLoading] = useState(false);
   const [revisedTask, setRevisedTask] = useState<any>(null);
+  // Quarter/Weeks UI state
+  const [selectedQuarter, setSelectedQuarter] = useState<number>(1);
+  const [quarterDropdownVisible, setQuarterDropdownVisible] = useState(false);
 
   React.useEffect(() => {
     if (!parentId) return;
@@ -307,7 +169,6 @@ export default function ParentDashboard() {
     get(teachersRef).then(snap => {
       if (snap.exists()) {
         const all = snap.val();
-        setTeachers(all);
         // Build a mapping from teacherId to teacher object
         const byId: any = {};
         Object.values(all).forEach((t: any) => {
@@ -342,11 +203,8 @@ export default function ParentDashboard() {
           const incomeBracketValue = incomeMap[incomeBracket] || 1;
 
           if (patternScore === 0 && numbersScore === 0) {
-            setPretestNotDone(true);
             setTasks([]);
             return;
-          } else {
-            setPretestNotDone(false);
           }
 
           // Check if tasks exist in DB under the parent
@@ -359,7 +217,7 @@ export default function ParentDashboard() {
               loadedTasks = Object.values(loadedTasks);
             }
             // Map fields for UI
-            loadedTasks = loadedTasks.map((t: any) => ({
+            loadedTasks = loadedTasks.map((t: any, idx: number) => ({
               title: t.title || t.task_title || '',
               details: t.details || t.task_details || '',
               objective: t.objective || t.task_objective || '',
@@ -368,11 +226,13 @@ export default function ParentDashboard() {
               status: t.status ||
                 (t.preRating == null ? 'notdone' : (t.postRating == null ? 'ongoing' : 'done')),
               assessmentScore: t.assessmentScore || { Preassessment: null, Postassessment: null },
+              // Graceful defaults for new structure
+              week: typeof t.week === 'number' ? t.week : ((idx % 8) + 1),
+              quarter: typeof t.quarter === 'number' ? t.quarter : 1,
             }));
             setTasks(loadedTasks);
           } else {
             // No tasks, generate via API
-            setTasksLoading(true);
             try {
               const response = await fetchWithRetry('https://mathtatag-api.onrender.com/predict', {
                 method: 'POST',
@@ -388,7 +248,7 @@ export default function ParentDashboard() {
               let result: any = null;
               try {
                 result = JSON.parse(rawText);
-              } catch (jsonErr) {
+              } catch {
                 console.error('API did not return JSON:', rawText);
                 throw new Error('API did not return valid JSON. Response: ' + rawText);
               }
@@ -400,7 +260,7 @@ export default function ParentDashboard() {
 
               console.log('API result:', result);
               let tasksToSave = Array.isArray(result.tasks) ? result.tasks : Array.isArray(result) ? result : [];
-              tasksToSave = tasksToSave.map((t: any) => ({
+              tasksToSave = tasksToSave.map((t: any, idx: number) => ({
                 title: t.task_title || t.title || '',
                 details: t.task_details || t.details || '',
                 objective: t.task_objective || t.objective || '',
@@ -411,6 +271,8 @@ export default function ParentDashboard() {
                   Preassessment: null,
                   Postassessment: null,
                 },
+                week: typeof t.week === 'number' ? t.week : ((idx % 8) + 1),
+                quarter: typeof t.quarter === 'number' ? t.quarter : 1,
               }));
               await set(parentTasksRef, tasksToSave);
               setTasks(tasksToSave);
@@ -419,7 +281,6 @@ export default function ParentDashboard() {
               Alert.alert('Error', err.message || 'Failed to assign tasks. Please try again.');
               setTasks([]);
             }
-            setTasksLoading(false);
           }
         }
       };
@@ -435,7 +296,7 @@ export default function ParentDashboard() {
         setLastSeenEvaluationTimestamp(parentData.latestEvaluation.timestamp);
       }
     }
-  }, [parentData?.latestEvaluation]);
+  }, [parentData?.latestEvaluation, lastSeenEvaluationTimestamp]);
 
   const handleSetupSubmit = async () => {
     if (!setupName.trim() || !setupContact.trim()) {
@@ -454,83 +315,12 @@ export default function ParentDashboard() {
       setParentData((prev: any) => ({ ...prev, name: setupName.trim(), contact: setupContact.trim(), householdIncome: setupIncome }));
       setShowSetupModal(false);
       Alert.alert('Profile updated!');
-    } catch (err) {
+    } catch {
       Alert.alert('Failed to update profile.');
     }
     setSetupLoading(false);
   };
 
-  // Placeholder data
-  const parentLRN = 'PARENT108756090030';
-  const teacher = {
-    name: 'Mrs. Loteriña',
-    grade: 'Grade 1 Teacher',
-    avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-    announcement: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam fermentum vestibulum lectus, eget eleifend tellus dignissim non. Praesent ultrices faucibus condimentum.'
-  };
-  const pretest = { percent: 35, score: 3, total: 10 };
-  const posttest = { percent: 0, score: 0, total: 10 };
-
-  // Calculate overall progress
-  const doneCount = tasks.filter(t => t.status === 'done').length;
-  const progressPercent = tasks.length > 0 ? Math.round((doneCount / tasks.length) * 100) : 0;
-
-  // Task status label
-  const statusLabel = (status: string) => {
-    if (status === 'done') return 'Done';
-    if (status === 'ongoing') return 'Ongoing';
-    return 'Not Done';
-  };
-
-  // Star rating component
-  const StarRating = ({ rating, onSelect }: { rating: number, onSelect: (n: number) => void }) => (
-    <View style={{ flexDirection: 'row', justifyContent: 'center', marginVertical: 8 }}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <TouchableOpacity key={n} onPress={() => onSelect(n)}>
-          <MaterialIcons
-            name={n <= rating ? 'star' : 'star-border'}
-            size={32}
-            color={n <= rating ? '#FFD600' : '#bbb'}
-            style={{ marginHorizontal: 2 }}
-          />
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  // Handle task click
-  const handleTaskPress = (idx: number) => {
-    const task = tasks[idx];
-    if (task.status === 'done') return;
-    if (task.status === 'notdone') {
-      // Show pre-rating modal
-      setRatingType('pre');
-      setRatingTaskIdx(idx);
-      setSelectedRating(task.preRating || 0);
-      setRatingModalVisible(true);
-    } else if (task.status === 'ongoing') {
-      // Show post-rating modal
-      setRatingType('post');
-      setRatingTaskIdx(idx);
-      setSelectedRating(task.postRating || 0);
-      setRatingModalVisible(true);
-    }
-  };
-
-  // Handle post-test click
-  const handlePostTest = () => {
-    if (doneCount !== tasks.length) {
-      Alert.alert('Cannot Start Post-Test', 'You must finish all tasks before starting the post-test.');
-      return;
-    }
-    // Proceed to post-test
-  };
-
-  // Add a placeholder user profile image
-  const userProfile = {
-    name: 'Parent User',
-    avatar: 'https://randomuser.me/api/portraits/men/99.jpg',
-  };
 
   // Handler for announcement click
   const handleAnnouncementPress = (announcement: any) => {
@@ -538,23 +328,6 @@ export default function ParentDashboard() {
     setModalVisible(true);
   };
 
-  // Handle change button click
-  const handleChangePress = (idx: number) => {
-    Alert.alert(
-      'Request Change',
-      `Are you sure you want to request a change for "${tasks[idx].title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes',
-          onPress: () => {
-            setChangeTaskIdx(idx);
-            setChangeModalVisible(true);
-          },
-        },
-      ]
-    );
-  };
 
   // Handle submit reason - Updated to use GPT API
   const handleSubmitChangeReason = async () => {
@@ -741,19 +514,35 @@ export default function ParentDashboard() {
   // In Pretest and Post-test status badge:
   const prePattern = studentData?.preScore?.pattern ?? 0;
   const preNumbers = studentData?.preScore?.numbers ?? 0;
-  const preScore = prePattern + preNumbers;
-  const preStatus = getStatusFromScore(preScore, 20, prePattern, preNumbers);
   const postPattern = studentData?.postScore?.pattern ?? 0;
   const postNumbers = studentData?.postScore?.numbers ?? 0;
-  const postScore = postPattern + postNumbers;
-  const postStatus = getStatusFromScore(postScore, 20, postPattern, postNumbers);
 
-  // Helper to render stars
-  const renderStars = (count: number) => {
-    return Array.from({ length: 5 }, (_, i) =>
-      <Text key={i} style={{ color: '#FFD600', fontSize: 15, marginRight: 1 }}>{i < count ? '★' : '☆'}</Text>
-    );
-  };
+  // Quarter-specific derived scores (fallback to overall if quarter data not present)
+  const quarterKey = `Q${selectedQuarter}` as const;
+  const quarterSource: any = (studentData?.quarterScores && studentData.quarterScores[quarterKey])
+    || (studentData?.quarters && studentData.quarters[quarterKey])
+    || null;
+  const selPrePattern = quarterSource?.preScore?.pattern ?? prePattern;
+  const selPreNumbers = quarterSource?.preScore?.numbers ?? preNumbers;
+  const selPostPattern = quarterSource?.postScore?.pattern ?? postPattern;
+  const selPostNumbers = quarterSource?.postScore?.numbers ?? postNumbers;
+  const selPreScore = selPrePattern + selPreNumbers;
+  const selPostScore = selPostPattern + selPostNumbers;
+  const selPrePercent = Math.round((selPreScore / 20) * 100);
+  const selPostPercent = Math.round((selPostScore / 20) * 100);
+  const selPreOutOf10 = Math.round(selPreScore / 2);
+  const selPostOutOf10 = Math.round(selPostScore / 2);
+
+  // Weekly progress for the selected quarter (weeks 1-8)
+  const tasksForSelectedQuarter = tasks.filter(t => (t.quarter ?? 1) === selectedQuarter);
+  const weekPercents = Array.from({ length: 8 }, (_, i) => {
+    const weekNum = i + 1;
+    const weekTasks = tasksForSelectedQuarter.filter(t => (t.week ?? 1) === weekNum);
+    if (weekTasks.length === 0) return 0;
+    const done = weekTasks.filter(t => t.status === 'done').length;
+    return Math.round((done / weekTasks.length) * 100);
+  });
+
 
   // Move _styles into StyleSheet.create for type safety
   const _modalStyles = StyleSheet.create({
@@ -934,180 +723,81 @@ export default function ParentDashboard() {
           </BlurView>
         </Modal>
 
-        <View style={styles.progressRowCardWrap}>
-          <View style={styles.progressCardSingle}>
-            <View style={styles.progressCol}>
-              <View style={styles.circleWrap}>
-                <View style={[styles.circle, { borderColor: '#2ecc40' }] }>
-                  <Text style={[styles.circleText, { color: '#2ecc40', fontSize: 28, fontWeight: 'bold' }]}>{studentData ? Math.round(((studentData.preScore?.pattern ?? 0) + (studentData.preScore?.numbers ?? 0)) / 20 * 100) : 0}%</Text>
-                </View>
-              </View>
-              <Text style={styles.progressLabel}>Pretest</Text>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#0097a7', marginTop: 2 }}>{studentData ? `${preScore}/20` : '0/20'}</Text>
-              <Text style={{ fontSize: 13, color: '#777', marginTop: 2 }}>Pattern: {prePattern}/10</Text>
-              <Text style={{ fontSize: 13, color: '#777', marginTop: 2 }}>Numbers: {preNumbers}/10</Text>
-              {/* Status badge */}
-              <View style={{ backgroundColor: statusColors[preStatus], borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3, marginTop: 4, alignSelf: 'flex-start' }}>
-                <Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{preStatus}</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.progressCardSingle}>
-            <View style={styles.progressCol}>
-              <View style={styles.circleWrap}>
-                <View style={[styles.circle, { borderColor: '#2ecc40' }] }>
-                  <Text style={[styles.circleText, { color: '#2ecc40', fontSize: 28, fontWeight: 'bold' }]}>{studentData ? Math.round(((studentData.postScore?.pattern ?? 0) + (studentData.postScore?.numbers ?? 0)) / 20 * 100) : 0}%</Text>
-                </View>
-              </View>
-              <Text style={styles.progressLabel}>Post-test</Text>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#0097a7', marginTop: 2 }}>{studentData ? `${postScore}/20` : '0/20'}</Text>
-              <Text style={{ fontSize: 13, color: '#777', marginTop: 2 }}>Pattern: {postPattern}/10</Text>
-              <Text style={{ fontSize: 13, color: '#777', marginTop: 2 }}>Numbers: {postNumbers}/10</Text>
-              {/* Status badge */}
-              <View style={{ backgroundColor: statusColors[postStatus], borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3, marginTop: 4, alignSelf: 'flex-start' }}>
-                <Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{postStatus}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
+        {/* Home Exercise CTA */}
+        <TouchableOpacity
+          style={styles.homeExerciseBtn}
+          onPress={() => router.push('/WelcomePage')}
+        >
+          <Text style={styles.homeExerciseText}>Home Exercise</Text>
+        </TouchableOpacity>
 
-        <View style={styles.tasksBox}>
-          <View style={styles.tasksTitleRow}>
-            <Text style={styles.tasksTitle}>Tasks</Text>
-            <View style={styles.generalProgressWrap}>
-              <View style={[styles.generalProgressBar, { width: `${progressPercent}%` }]} />
-            </View>
-            <Text style={styles.generalProgressText}>{`${progressPercent}%`}</Text>
+        {/* Combined Quarter Panel: Pre/Post test + Weekly progress */}
+        <View style={styles.quarterPanel}>
+          <View style={styles.quarterHeaderRow}>
+            <Text style={styles.sectionTitle}>Quarter</Text>
+            <TouchableOpacity style={styles.quarterDropdown} onPress={() => setQuarterDropdownVisible(true)}>
+              <Text style={{ fontWeight: '600', color: '#222', marginRight: 4 }}>Quarter {selectedQuarter}</Text>
+              <MaterialIcons name="arrow-drop-down" size={22} color="#222" />
+            </TouchableOpacity>
           </View>
-          {/* Scrollable tasks list */}
-          {pretestNotDone ? (
-            <View style={[styles.taskRow, { justifyContent: 'center', alignItems: 'center', paddingVertical: 20 }]}> 
-              <Text style={{ fontSize: 16, color: '#888', textAlign: 'center' }}>
-                Tasks will load after your child completes the pretest.
-              </Text>
-            </View>
-          ) : tasksLoading ? (
-            <View style={[styles.taskRow, { justifyContent: 'center', alignItems: 'center', paddingVertical: 20 }]}> 
-              <Text style={{ fontSize: 16, color: '#888', textAlign: 'center' }}>
-                Assigning tasks...
-              </Text>
-            </View>
-          ) : tasks.length === 0 ? (
-            <View style={[styles.taskRow, { justifyContent: 'center', alignItems: 'center', paddingVertical: 20 }]}> 
-              <Text style={{ fontSize: 16, color: '#888', textAlign: 'center' }}>
-                No tasks available yet.{'\n'}
-                <Text style={{ fontSize: 14, color: '#aaa' }}>
-                  Tasks will appear once your child completes the pretest.
-                </Text>
-              </Text>
-            </View>
-          ) : (
-            tasks.map((item, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.taskCard,
-                  item.status === 'done' ? styles.taskCardDone : item.status === 'ongoing' ? styles.taskCardOngoing : styles.taskCardNotDone,
-                ]}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                  <View style={[
-                    styles.taskNum,
-                    item.status === 'done' ? styles.taskNumDone : styles.taskNumGray,
-                  ]}>
-                    <Text style={[
-                      styles.taskNumText,
-                      item.status === 'done' ? styles.taskNumTextDone : styles.taskNumTextGray,
-                    ]}>{index + 1}</Text>
+          <Modal
+            visible={quarterDropdownVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setQuarterDropdownVisible(false)}
+          >
+            <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setQuarterDropdownVisible(false)}>
+              <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, minWidth: 220 }}>
+                {[1,2,3,4].map(q => (
+                  <TouchableOpacity key={q} style={{ paddingVertical: 10, borderBottomWidth: q===4?0:1, borderBottomColor: '#eee' }} onPress={() => { setSelectedQuarter(q); setQuarterDropdownVisible(false); }}>
+                    <Text style={{ fontSize: 16, color: '#222' }}>Quarter {q}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </Pressable>
+          </Modal>
+
+          <View style={styles.scoreCirclesRow}>
+            <View style={styles.scoreItemHalf}>
+              <View style={styles.scoreItemRow}>
+                <View style={styles.circleWrap}>
+                  <View style={[styles.circle, { borderColor: '#2ecc40' }] }>
+                    <Text style={[styles.circleText, { color: '#2ecc40', fontSize: 22, fontWeight: 'bold' }]}>{studentData ? selPrePercent : 0}%</Text>
                   </View>
-                  <Text style={styles.taskTitleSmall}>{item.title}</Text>
-                  {item.category && (
-                    <View style={{
-                      backgroundColor: item.category === 'pattern' ? '#e3f2fd' :
-                        item.category === 'numbers' ? '#f3e5f5' :
-                        item.category === 'technology' ? '#e8f5e8' :
-                        item.category === 'practical' ? '#fff3e0' :
-                        item.category === 'mixed' ? '#fce4ec' : '#f1f1f1',
-                      borderRadius: 4,
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      marginLeft: 8,
-                      alignSelf: 'flex-start',
-                    }}>
-                      <Text style={{
-                        fontSize: 10,
-                        color: item.category === 'pattern' ? '#1976d2' :
-                          item.category === 'numbers' ? '#7b1fa2' :
-                          item.category === 'technology' ? '#388e3c' :
-                          item.category === 'practical' ? '#f57c00' :
-                          item.category === 'mixed' ? '#c2185b' : '#666',
-                        fontWeight: 'bold',
-                      }}>
-                        {item.category.toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
                 </View>
-                {!!item.details && (
-                  <Text style={styles.taskDetails}>{item.details}</Text>
-                )}
-                {(item.preRating || item.postRating) && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, marginBottom: 2 }}>
-                    {item.preRating && (
-                      <>
-                        <Text style={{ fontSize: 13, color: '#888', marginRight: 2 }}>Simula:</Text>
-                        {renderStars(item.preRating)}
-                      </>
-                    )}
-                    {item.postRating && (
-                      <>
-                        <Text style={{ fontSize: 13, color: '#888', marginLeft: 16, marginRight: 2 }}>Matapos:</Text>
-                        {renderStars(item.postRating)}
-                      </>
-                    )}
-                  </View>
-                )}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                  <View style={[
-                    styles.taskStatus,
-                    item.status === 'done' ? styles.statusDone : item.status === 'ongoing' ? styles.statusOngoing : styles.statusNotDone,
-                  ]}>
-                    {item.status === 'done' && <MaterialIcons name="check-circle" size={16} color="#2ecc40" style={{ marginRight: 4 }} />}
-                    {item.status === 'ongoing' && <MaterialIcons name="access-time" size={16} color="#f1c40f" style={{ marginRight: 4 }} />}
-                    {item.status === 'notdone' && <MaterialIcons name="radio-button-unchecked" size={16} color="#bbb" style={{ marginRight: 4 }} />}
-                    <Text style={{ fontWeight: 'bold', fontSize: 13 }}>{statusLabel(item.status)}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    {item.status === 'notdone' && (
-                      <TouchableOpacity
-                        style={styles.changeBtn}
-                        onPress={() => handleChangePress(index)}
-                      >
-                        <Feather name="refresh-cw" size={20} color="#2ecc40" />
-                      </TouchableOpacity>
-                    )}
-                    {item.status === 'notdone' && (
-                      <TouchableOpacity
-                        style={styles.simulanBtn}
-                        onPress={() => handleTaskPress(index)}
-                      >
-                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Simulan</Text>
-                      </TouchableOpacity>
-                    )}
-                    {item.status === 'ongoing' && (
-                      <TouchableOpacity
-                        style={styles.markTaposBtn}
-                        onPress={() => handleTaskPress(index)}
-                      >
-                        <Text style={{ color: '#222', fontWeight: 'bold', fontSize: 15 }}>Markahang Tapos</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                <View style={styles.scoreTextCol}>
+                  <Text style={styles.progressLabelLarge}>Pretest</Text>
+                  <Text style={styles.scoreOutOfTen}>{studentData ? `${selPreOutOf10}/10` : '0/10'}</Text>
                 </View>
               </View>
-            ))
-          )}
+            </View>
+            <View style={styles.scoreItemHalf}>
+              <View style={styles.scoreItemRow}>
+                <View style={styles.circleWrap}>
+                  <View style={[styles.circle, { borderColor: '#ff5a5a' }]}>
+                    <Text style={[styles.circleText, { color: '#ff5a5a', fontSize: 22, fontWeight: 'bold' }]}>{studentData ? selPostPercent : 0}%</Text>
+                  </View>
+                </View>
+                <View style={styles.scoreTextCol}>
+                  <Text style={styles.progressLabelLarge}>Post-test</Text>
+                  <Text style={styles.scoreOutOfTen}>{studentData ? `${selPostOutOf10}/10` : '0/10'}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View style={{ marginTop: 10, width: '100%' }}>
+            {Array.from({ length: 8 }, (_, i) => (
+              <View key={i} style={styles.weekRow}>
+                <Text style={styles.weekLabel}>Week {i + 1}</Text>
+                <View style={styles.weekBarBg}>
+                  <View style={[styles.weekBarFill, { width: `${weekPercents[i]}%` }]} />
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
+        {/* Tasks panel removed per new design */}
 
         {/* Change Reason Modal */}
         <Modal
@@ -1408,7 +1098,7 @@ export default function ParentDashboard() {
   );
 }
 
-const CIRCLE_SIZE = 80;
+const CIRCLE_SIZE = Math.max(64, Math.min(96, Math.round(width * 0.22)));
 const styles = StyleSheet.create({
   bg: {
     flex: 1,
@@ -1494,7 +1184,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
   },
   announcementBox: {
-    width: width * 0.8,
+    width: width * 0.96,
     backgroundColor: 'rgba(255,255,255,0.82)',
     borderRadius: 20,
     padding: 18,
@@ -1558,6 +1248,105 @@ const styles = StyleSheet.create({
     gap: 12,
     marginLeft: 'auto',
     marginRight: 'auto',
+  },
+  homeExerciseBtn: {
+    width: '92%',
+    backgroundColor: '#27ae60',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  homeExerciseText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  quarterPanel: {
+    width: '92%',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  quarterHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  quarterDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f3f3',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  scoreCirclesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  scoreItemHalf: {
+    flex: 1,
+    minWidth: 0,
+  },
+  scoreItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  scoreTextCol: {
+    flexDirection: 'column',
+  },
+  progressLabelLarge: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#222',
+  },
+  scoreOutOfTen: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0097a7',
+  },
+  weekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 6,
+  },
+  weekLabel: {
+    width: 70,
+    fontSize: 14,
+    color: '#222',
+    fontWeight: '700',
+  },
+  weekBarBg: {
+    flex: 1,
+    height: 12,
+    backgroundColor: '#e6e6e6',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  weekBarFill: {
+    height: 12,
+    backgroundColor: '#2ecc40',
+    borderRadius: 8,
   },
   progressCardSingle: {
     flex: 1,
@@ -1770,7 +1559,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   modalAnnouncementBox: {
-    width: '85%',
+    width: '75%',
     backgroundColor: 'rgba(255,255,255,0.97)',
     borderRadius: 22,
     padding: 22,

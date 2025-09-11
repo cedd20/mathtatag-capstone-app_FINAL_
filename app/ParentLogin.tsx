@@ -3,8 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts } from 'expo-font';
 import { useRouter } from 'expo-router';
 import { get, ref } from 'firebase/database';
-import React, { useEffect, useState } from 'react';
-import { Dimensions, ImageBackground, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Dimensions, ImageBackground, KeyboardAvoidingView, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { db } from '../constants/firebaseConfig';
 
 const { width } = Dimensions.get('window'); // Removed unused height variable

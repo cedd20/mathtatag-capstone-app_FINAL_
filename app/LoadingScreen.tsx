@@ -1,14 +1,15 @@
+import { useAudio } from '@/contexts/AudioContext';
 import { useFonts } from 'expo-font';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Animated, Dimensions, Image, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, StyleSheet, Text, View } from 'react-native';
 
 const bgWelcome = require('../assets/game pngs/bgWelcome.png');
-const { width } = Dimensions.get('window');
 
 export default function LoadingScreen() {
   const router = useRouter();
   const { studentId, classId } = useLocalSearchParams();
+  const { playMusic } = useAudio();
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
@@ -17,6 +18,9 @@ export default function LoadingScreen() {
   });
 
   useEffect(() => {
+    // Ensure music continues playing
+    playMusic();
+
     Animated.timing(progressAnim, {
       toValue: 1,
       duration: 2000,
@@ -30,7 +34,7 @@ export default function LoadingScreen() {
         router.replace({ pathname: '/Homepage', params: { studentId, classId } });
       });
     });
-  }, [studentId, classId]);
+  }, [studentId, classId, playMusic, fadeAnim, progressAnim, router]);
 
   const barWidth = progressAnim.interpolate({
     inputRange: [0, 1],

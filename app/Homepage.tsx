@@ -1,6 +1,6 @@
+import { useAudio } from '@/contexts/AudioContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from '@react-native-community/slider';
-import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
@@ -12,7 +12,6 @@ const settings = require('../assets/game pngs/settings.png');
 const play = require('../assets/game pngs/play.png');
 const about = require('../assets/game pngs/about.png');
 const home = require('../assets/game pngs/home.png');
-const lock = require('../assets/game pngs/lock.png');
 const map1 = require('../assets/game pngs/map1.png');
 const map2 = require('../assets/game pngs/map2.png');
 const map3 = require('../assets/game pngs/map3.png');
@@ -28,21 +27,18 @@ const map12 = require('../assets/game pngs/map12.png');
 const deck = require('../assets/game pngs/deck.png');
 const arrowL = require('../assets/game pngs/arrowL.png');
 const arrowR = require('../assets/game pngs/arrowR.png');
-const bgMusic = require('../assets/music/Kids Playing Funny Background Music For Videos.mp3');
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export default function Homepage() {
   const router = useRouter();
+  const { stopMusic, playVoiceover } = useAudio();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const playScale = useRef(new Animated.Value(1)).current;
   const logoBeat = useRef(new Animated.Value(1)).current;
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [sfxVolume, setSfxVolume] = useState(0.5);
-  const [musicVolume, setMusicVolume] = useState(0.3);
-  const [isMusicEnabled, setIsMusicEnabled] = useState(true);
   const [isEnglish, setIsEnglish] = useState(true);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   // Animated values for map pulsing
   const mapScales = [
@@ -83,10 +79,6 @@ export default function Homepage() {
       try {
         const storedSfx = await AsyncStorage.getItem('sfxVolume');
         if (storedSfx !== null) setSfxVolume(Number(storedSfx));
-        const storedMusic = await AsyncStorage.getItem('musicVolume');
-        if (storedMusic !== null) setMusicVolume(Number(storedMusic));
-        const storedMusicEnabled = await AsyncStorage.getItem('isMusicEnabled');
-        if (storedMusicEnabled !== null) setIsMusicEnabled(JSON.parse(storedMusicEnabled));
         const lang = await AsyncStorage.getItem('isEnglish');
         if (lang !== null) setIsEnglish(JSON.parse(lang));
       } catch {}
@@ -98,79 +90,34 @@ export default function Homepage() {
     AsyncStorage.setItem('sfxVolume', String(sfxVolume));
   }, [sfxVolume]);
 
-  // Persist music volume when changed
-  useEffect(() => {
-    AsyncStorage.setItem('musicVolume', String(musicVolume));
-  }, [musicVolume]);
-
-  // Persist music enabled setting
-  useEffect(() => {
-    AsyncStorage.setItem('isMusicEnabled', JSON.stringify(isMusicEnabled));
-  }, [isMusicEnabled]);
-
   // Persist language setting
   useEffect(() => {
     AsyncStorage.setItem('isEnglish', JSON.stringify(isEnglish));
   }, [isEnglish]);
 
-  // Initialize and play background music
+  // Music is already playing from WelcomePage → Loading flow, no need to restart
+
+  // Play voiceover when component mounts
   useEffect(() => {
-    let isMounted = true;
+    const timer = setTimeout(() => {
+      playVoiceover();
+    }, 1000); // Play voiceover after 1 second delay
 
-    const setupMusic = async () => {
-      try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: false,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
-        });
+    return () => clearTimeout(timer);
+  }, [playVoiceover]);
 
-        const { sound: newSound } = await Audio.Sound.createAsync(bgMusic, {
-          shouldPlay: isMusicEnabled,
-          isLooping: true,
-          volume: musicVolume,
-        });
-
-        if (isMounted) {
-          setSound(newSound);
-        }
-      } catch (error) {
-        console.log('Error loading background music:', error);
-      }
-    };
-
-    setupMusic();
-
+  // Stop music when component unmounts (user navigates away from homepage)
+  useEffect(() => {
     return () => {
-      isMounted = false;
-      if (sound) {
-        sound.unloadAsync();
-      }
+      stopMusic();
     };
-  }, []);
-
-  // Update music volume when changed
-  useEffect(() => {
-    if (sound) {
-      sound.setVolumeAsync(musicVolume);
-    }
-  }, [musicVolume, sound]);
-
-  // Play/pause music when enabled/disabled
-  useEffect(() => {
-    if (sound) {
-      if (isMusicEnabled) {
-        sound.playAsync();
-      } else {
-        sound.pauseAsync();
-      }
-    }
-  }, [isMusicEnabled, sound]);
+  }, [stopMusic]);
 
   // Home button handler
   const handleHome = async () => {
+    // Stop music when going back to WelcomePage
+    await stopMusic();
+    
     // Retrieve last studentId and classId from AsyncStorage
     const studentId = await AsyncStorage.getItem('lastStudentId');
     const classId = await AsyncStorage.getItem('lastClassId');
@@ -180,8 +127,11 @@ export default function Homepage() {
       router.replace('/WelcomePage');
     }
   };
-
+  
   const handlePlay = async () => {
+    // Stop music when navigating to game maps
+    await stopMusic();
+    
     // Map navigation based on selected week
     const mapRoutes = [
       '/Map1Stages',   // Week 1 → Map1
@@ -281,7 +231,8 @@ export default function Homepage() {
         Animated.delay(1200),
       ])
     ).start();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fadeAnim, playScale, logoBeat, lockBeat]); // mapScales and mapRotations are stable useRef values
 
   // About modal state
   const [aboutVisible, setAboutVisible] = useState(false);
@@ -296,8 +247,6 @@ export default function Homepage() {
     home: isEnglish ? 'Home' : 'Bahay',
     settings: isEnglish ? 'Settings' : 'Mga Setting',
     sfxVolume: isEnglish ? 'SFX Volume:' : 'Dami ng SFX:',
-    musicVolume: isEnglish ? 'Music Volume:' : 'Dami ng Musika:',
-    musicEnabled: isEnglish ? 'Background Music:' : 'Musika sa Likod:',
     language: isEnglish ? 'Language:' : 'Wika:',
     english: 'ENGLISH',
     tagalog: 'TAGALOG',
@@ -350,31 +299,6 @@ export default function Homepage() {
                 thumbTintColor="#1fb28a"
               />
               <Text style={styles.settingValue}>{Math.round(sfxVolume * 100)}%</Text>
-            </View>
-            {/* Music Volume */}
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>{t.musicVolume}</Text>
-              <Slider
-                style={{ width: 150, height: 40 }}
-                minimumValue={0}
-                maximumValue={1}
-                value={musicVolume}
-                onValueChange={setMusicVolume}
-                minimumTrackTintColor="#1fb28a"
-                maximumTrackTintColor="#d3d3d3"
-                thumbTintColor="#1fb28a"
-              />
-              <Text style={styles.settingValue}>{Math.round(musicVolume * 100)}%</Text>
-            </View>
-            {/* Music Toggle */}
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>{t.musicEnabled}</Text>
-              <Switch
-                value={isMusicEnabled}
-                onValueChange={setIsMusicEnabled}
-                thumbColor={isMusicEnabled ? '#1fb28a' : '#ccc'}
-                trackColor={{ false: '#d3d3d3', true: '#1fb28a' }}
-              />
             </View>
             {/* Language Selector */}
             <View style={styles.settingRow}>

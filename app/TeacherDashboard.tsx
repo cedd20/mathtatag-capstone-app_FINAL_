@@ -153,7 +153,6 @@ export default function TeacherDashboard() {
   const [sortAsc, setSortAsc] = useState(true);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [editingStudentName, setEditingStudentName] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [improvementData, setImprovementData] = useState<{ student: Student, pre: number, post: number, preStatus: string, postStatus: string } | null>(null);
   const [evaluationData, setEvaluationData] = useState<{ student: Student, classId: string } | null>(null);
   const [evaluationText, setEvaluationText] = useState('');
@@ -310,32 +309,14 @@ export default function TeacherDashboard() {
 
   // Analytics calculations
   // Removed unused totalClasses and totalStudents variables
-  const allPerformance = classes?.flatMap(c => c.learnersPerformance?.map(lp => lp.percent) || []) || [];
   // For dashboard avgImprovement, only include students with both pre and post and pre > 0
-  const allStudentsWithBoth = classes.flatMap(cls => (cls.students ?? []).filter(s => {
-    const hasPre = s.preScore && typeof s.preScore.pattern === 'number' && typeof s.preScore.numbers === 'number';
-    const hasPost = s.postScore && typeof s.postScore.pattern === 'number' && typeof s.postScore.numbers === 'number';
-    const pre = (s.preScore?.pattern ?? 0) + (s.preScore?.numbers ?? 0);
-    const post = (s.postScore?.pattern ?? 0) + (s.postScore?.numbers ?? 0);
-    // Only include if both pre and post exist and pre > 0 and post > 0
-    return hasPre && hasPost && pre > 0 && post > 0;
-  }));
   // Removed unused avgPerformance variable
-  let dashboardAvgImprovement = 0;
-  if (allStudentsWithBoth.length > 0) {
-    const improvements = allStudentsWithBoth.map(s => {
-      const pre = (s.preScore?.pattern ?? 0) + (s.preScore?.numbers ?? 0);
-      const post = (s.postScore?.pattern ?? 0) + (s.postScore?.numbers ?? 0);
-      return pre > 0 ? ((post - pre) / pre) * 100 : 0;
-    });
-    dashboardAvgImprovement = Math.round(improvements.reduce((a, b) => a + b, 0) / improvements.length);
-  }
 
   // Modal open/close helpers
   const openModal = (type: ModalType, extra: any = null) => {
     setModalType(type);
     if (type === 'category') {
-      setSelectedCategory(extra?.category);
+      // setSelectedCategory(extra?.category);
       setSelectedClassId(extra?.classId);
     }
     if (type === 'addStudent') {
@@ -472,7 +453,7 @@ export default function TeacherDashboard() {
     setStudentNickname('');
     setAnnounceText('');
     setAnnounceTitle('');
-    setSelectedCategory(null);
+    // setSelectedCategory(null);
     setSelectedStudent(null);
     setTestType(null);
     setSelectedClassId(null);
@@ -510,7 +491,7 @@ export default function TeacherDashboard() {
       await set(ref(db, `Classes/${readableClassId}`), newClass);
       Alert.alert('Success', `Class created successfully!\n\nClass ID: ${readableClassId}`);
       closeModal();
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to create class. Please try again.');
     }
   };
@@ -1525,7 +1506,7 @@ export default function TeacherDashboard() {
             Alert.alert('Success', 'Announcement sent!');
             setAnnounceTitle('');
             closeModal();
-          } catch (err) {
+          } catch {
             Alert.alert('Error', 'Failed to send announcement.');
           }
         };
@@ -1869,7 +1850,7 @@ export default function TeacherDashboard() {
                       try {
                         const response = await askGpt(prompt);
                         setEvaluationText(response);
-                      } catch (err) {
+                      } catch {
                         setEvaluationText('');
                         Alert.alert('Error', 'Failed to generate evaluation.');
                       }
@@ -1953,7 +1934,7 @@ export default function TeacherDashboard() {
                       Alert.alert('Success', 'Evaluation sent to parent!');
                       setEvaluationText('');
                       closeModal();
-                    } catch (err) {
+                    } catch {
                       Alert.alert('Error', 'Failed to send evaluation.');
                     }
                   }}><Text style={[styles.modalBtnText, styles.modalBtnTextPrimary]}>Send Evaluation</Text></Pressable>
@@ -2013,7 +1994,7 @@ export default function TeacherDashboard() {
         if (!Array.isArray(loadedTasks)) loadedTasks = Object.values(loadedTasks);
       }
       setParentTasks(loadedTasks);
-    } catch (err) {
+            } catch {
       setParentTasks([]);
     }
     setParentTasksLoading(false);
@@ -2103,7 +2084,7 @@ export default function TeacherDashboard() {
                 try {
                   await signOut(auth);
                   window.location.reload();
-                } catch (err) {
+                } catch {
                   Alert.alert('Error', 'Failed to log out.');
                 }
               }}

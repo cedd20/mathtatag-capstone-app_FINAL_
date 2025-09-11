@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { get, ref } from 'firebase/database';
 import { useFonts } from 'expo-font';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Image, ImageBackground, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { get, ref } from 'firebase/database';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Dimensions, ImageBackground, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { db } from '../constants/firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
@@ -29,7 +29,7 @@ export default function Map2Stages() {
   const router = useRouter();
   
   // Change completed state to track status
-  const [stageStatus, setStageStatus] = useState<Array<'pending' | 'correct' | 'wrong'>>([
+  const [stageStatus] = useState<('pending' | 'correct' | 'wrong')[]>([
     'pending', 'pending', 'pending', 'pending', 'pending', 'pending',
   ]);
   const [currentGame, setCurrentGame] = useState<number | null>(null);
@@ -40,7 +40,6 @@ export default function Map2Stages() {
   const [debugMode, setDebugMode] = useState(false);
   const [stagePositions, setStagePositions] = useState(STAGES);
   const [draggingStage, setDraggingStage] = useState<number | null>(null);
-  const [savedPositions, setSavedPositions] = useState(STAGES);
 
   // Animation values for each stage
   const stageScales = useRef(STAGES.map(() => new Animated.Value(1))).current;
@@ -114,7 +113,6 @@ export default function Map2Stages() {
         if (saved) {
           const parsed = JSON.parse(saved);
           setStagePositions(parsed);
-          setSavedPositions(parsed);
         }
       } catch (e) {
         console.error('Error loading saved positions:', e);
@@ -151,16 +149,6 @@ export default function Map2Stages() {
     }
   };
 
-  const handleGameComplete = (result?: { correct?: boolean }) => {
-    if (currentGame !== null) {
-      setStageStatus(prev => {
-        const updated = [...prev];
-        updated[currentGame!] = result?.correct ? 'correct' : 'wrong';
-        return updated;
-      });
-      setCurrentGame(null);
-    }
-  };
 
   // Stage position adjustment functions
   const adjustStagePosition = (index: number, direction: 'up' | 'down' | 'left' | 'right', amount: number = 0.02) => {
@@ -201,7 +189,7 @@ export default function Map2Stages() {
   const saveStagePositions = async () => {
     try {
       await AsyncStorage.setItem('stagePositions2', JSON.stringify(stagePositions));
-      setSavedPositions([...stagePositions]);
+      setStagePositions([...stagePositions]);
       console.log('Week 2 positions saved successfully!');
     } catch (e) {
       console.error('Error saving positions:', e);

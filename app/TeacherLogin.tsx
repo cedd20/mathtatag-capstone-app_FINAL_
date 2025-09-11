@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import { useRouter } from 'expo-router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { get, ref } from 'firebase/database';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Dimensions, ImageBackground, KeyboardAvoidingView, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../constants/firebaseConfig';
 
@@ -194,7 +194,7 @@ export default function TeacherLogin() {
               onPress={() => setShowPassword(!showPassword)}
             >
               <AntDesign
-                name={showPassword ? 'eyeo' : 'eyeo'}
+                name={showPassword ? 'eye' : 'eye-invisible'}
                 size={20}
                 color="#888"
               />
